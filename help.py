@@ -1,48 +1,57 @@
+import cv2
+import Queue
+import threading
+import keyboard
 import numpy as np
 import cv2
 
-class CoordinateStore:
-    def __init__(self):
-        self.points = []
+class VideoCap:
 
-    def select_point(self,event,x,y,flags,param):
-            if event == cv2.EVENT_LBUTTONDBLCLK:
-                cv2.circle(img,(x,y),3,(255,0,0),-1)
-                self.points.append((x,y))
+  def __init__(self, name):
+    self.cap = cv2.VideoCapture(name)
+    self.q = Queue.Queue()
+    t = threading.Thread(target=self._reader)
+    t.daemon = True
+    t.start()
 
-cs = CoordinateStore()
-img = cv2.imread('C:\Users\CJ\Desktop\cut_images_xJm66dBCTl2D\image_part_002.jpg',-1)
+  # read frames as soon as they are available, keeping only most recent one
+  def _reader(self):
+    while True:
+      ret, frame = self.cap.read()
+      if not ret:
+        break
+      if not self.q.empty():
+        try:
+          self.q.get_nowait()   # discard previous (unprocessed) frame
+        except Queue.Empty:
+          pass
+      self.q.put(frame)
+
+  def read(self):
+    return self.q.get()
+
+
 cv2.namedWindow('image')
-cv2.setMouseCallback('image',cs.select_point)
+cap = VideoCap('https://192.168.1.222:8080/video')
 
 while(True):
-    print(len(cs.points))
-    if len(cs.points) == 4:
-        pts1 = np.float32([cs.points[0], cs.points[1], cs.points[2], cs.points[3]])
-        # pts1 = np.float32([
-        #     (696, 455),
-        #     (587, 455),
-        #     (235, 700),
-        #     (1075, 700)
-        # ])
-        pts2 = np.float32([
-        (1265 - 350, 0),
-        (350, 0),
-        (350, 900),
-        (1265 - 350, 900)
-    ])
-        matrix = cv2.getPerspectiveTransform(pts1, pts2)
-        result0 = cv2.warpPerspective(img, matrix, (1265, 900))
-        result = cv2.warpPerspective(img, matrix, (1265, 900), flags=cv2.INTER_LINEAR)
-        result = cv2.resize(result, (1080, 720))
+    img = cv2.imread(fname)
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    ret, corners = cv2.findChessboardCorners(gray, (7, 6), None)
 
-        cv2.imshow('warpLin', result)
-        cv2.imshow('warp', result0)
+    if ret == True:
+        corners2 = cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), criteria)
 
+        # Find the rotation and translation vectors.
+        rvecs, tvecs, inliers = cv2.solvePnPRansac(objp, corners2, mtx, dist)
 
-    cv2.imshow('image',img)
-    if chr(cv2.waitKey(1) & 255) == 'q':
-        break;
+        # project 3D points to image plane
+        imgpts, jac = cv2.projectPoints(axis, rvecs, tvecs, mtx, dist)
+
+        img = cv2.draw(img, corners2, imgpts)
+        cv2.imshow('img', img)
+        k = cv2.waitKey(0) & 0xff
+
 
 # When everything done, release the capture
 cv2.destroyAllWindows()

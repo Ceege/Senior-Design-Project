@@ -5,11 +5,13 @@ import sys
 import Queue
 import threading
 import keyboard
+import socket
 
 from twisted.python import log
 from twisted.internet import reactor
 from autobahn.twisted.websocket import WebSocketServerProtocol
 from autobahn.twisted.websocket import WebSocketServerFactory
+
 
 class MyServerProtocol(WebSocketServerProtocol):
     connections = list()
@@ -69,42 +71,71 @@ class MainApp(QWidget):
 
     def __init__(self):
         QWidget.__init__(self)
-        self.video_size = QSize(1920, 1080)
+        self.video_size = QSize(1280, 720)
         self.setup_ui()
+        self.move(300, 300)
+
+    def connection(self):
         self.setup_camera()
+
+    def getPos(self, event):
+        x = event.pos().x()
+        y = event.pos().y()
+        print(x)
 
     def setup_ui(self):
         """Initialize widgets.
         """
         self.image_label = QLabel()
         self.image_label.setFixedSize(self.video_size)
-
+        self.image_label.mousePressEvent = self.getPos
         self.quit_button = QPushButton("Quit")
         self.quit_button.clicked.connect(self.close)
 
+        self.textbox = QLineEdit("192.168.1.222")
+        self.IPlabel = QLabel(self)
+        self.IPlabel.setStyleSheet("QLabel { color : green; }")
+        self.IPlabel.setText("My IP: " + socket.gethostbyname_ex(socket.gethostname())[2][2])
+        print(socket.gethostbyname_ex(socket.gethostname())[2][2])
+
+        self.IPlabel2 = QLabel(self)
+        self.IPlabel2.setText("                               Phone IP: ")
+
+        self.connect_button = QPushButton("Connect")
+        self.connect_button.clicked.connect(self.connection)
+
+        self.button_menu = QHBoxLayout()
+        self.button_menu.addWidget(self.IPlabel)
+        self.button_menu.addWidget(self.IPlabel2)
+        self.button_menu.addWidget(self.textbox)
+        self.button_menu.addWidget(self.connect_button)
+        self.button_menu.addWidget(self.quit_button)
+
         self.main_layout = QVBoxLayout()
         self.main_layout.addWidget(self.image_label)
-        self.main_layout.addWidget(self.quit_button)
+        self.main_layout.addLayout(self.button_menu)
+
+
 
         self.setLayout(self.main_layout)
 
     def setup_camera(self):
         """Initialize camera.
         """
-        self.capture = VideoCap('https://192.168.1.222:8080/video')
+        self.capture = VideoCap('https://' + self.textbox.text() + ':8080/video')
         # self.capture.set(cv2.cv.CV_CAP_PROP_FRAME_WIDTH, self.video_size.width())
         # self.capture.set(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT, self.video_size.height())
 
         self.timer = QTimer()
         self.timer.timeout.connect(self.display_video_stream)
-        self.timer.start(10)
+        self.timer.start(30)
 
     def display_video_stream(self):
         """Read frame from camera and repaint QLabel widget.
         """
         frame = self.capture.read()
+
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        #frame = cv2.flip(frame, 1)
         image = QImage(frame, frame.shape[1], frame.shape[0],
                        frame.strides[0], QImage.Format_RGB888)
         self.image_label.setPixmap(QPixmap.fromImage(image))
